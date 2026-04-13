@@ -1,0 +1,1 @@
+worker: python scripts/ACTC-Fronius2.py

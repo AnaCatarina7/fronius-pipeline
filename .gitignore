@@ -1,0 +1,14 @@
+# credentials and secrets
+secrets/
+.env
+__pycache__/
+*.xlsx
+
+# python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# jupyter/colab artifacts
+.ipynb_checkpoints/
+*.xlsx

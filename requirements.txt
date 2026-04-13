@@ -1,0 +1,8 @@
+clts_pcp
+crate
+influxdb-client
+pandas
+openpyxl
+requests
+resend
+python-dotenv
