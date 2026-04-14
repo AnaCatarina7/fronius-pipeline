@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fronius Pipeline</title>
+  <style>
+    /* Simple, clean layout — no frameworks */
+    body {
+      font-family: monospace;
+      background: #1a1a1a;
+      color: #d4d4d4;
+      max-width: 700px;
+      margin: 60px auto;
+      padding: 0 1.5rem;
+    }
+
+    h1 {
+      font-size: 1rem;
+      font-weight: normal;
+      color: #888;
+      margin-bottom: 2rem;
+      letter-spacing: 0.05em;
+    }
+
+    /* Form fields */
+    .fields {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      color: #666;
+      margin-bottom: 0.4rem;
+    }
+
+    input {
+      background: #2a2a2a;
+      border: 1px solid #333;
+      color: #d4d4d4;
+      padding: 0.4rem 0.6rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      border-radius: 4px;
+      width: 160px;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #555;
+    }
+
+    /* Run button */
+    button {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      color: #d4d4d4;
+      padding: 0.45rem 1.2rem;
+      font-family: monospace;
+      font-size: 0.85rem;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 1.5rem;
+    }
+
+    button:hover { border-color: #777; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Status line */
+    #status {
+      font-size: 0.75rem;
+      color: #666;
+      margin-bottom: 0.75rem;
+      min-height: 1rem;
+    }
+
+    /* Log terminal */
+    #log {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      padding: 1rem;
+      font-size: 0.78rem;
+      line-height: 1.7;
+      color: #aaa;
+      min-height: 260px;
+      max-height: 500px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .line-ok  { color: #7ec87e; }
+    .line-err { color: #c87ea0; }
+    .line-dim { color: #555; }
+  </style>
+</head>
+<body>
+
+  <h1>FRONIUS / SOLAR DATA PIPELINE</h1>
+
+  <!-- Config fields -->
+  <div class="fields">
+    <div>
+      <label for="start_date">start_date</label>
+      <input type="date" id="start_date" />
+    </div>
+    <div>
+      <label for="days_back">days_back</label>
+      <input type="number" id="days_back" value="10" min="1" max="365" />
+    </div>
+  </div>
+
+  <button id="runBtn" onclick="runPipeline()">▶ run</button>
+
+  <div id="status">ready</div>
+
+  <!-- Output log -->
+  <div id="log"><span class="line-dim">— waiting for run —</span></div>
+
+<script>
+  // Set default date: March of current year, minus 10 days from today
+  (function () {
+    const today = new Date();
+    const march = new Date(today.getFullYear(), 2, 1); // March 1st
+    march.setDate(march.getDate() - 10);               // minus 10 days
+    document.getElementById("start_date").value = march.toISOString().split("T")[0];
+  })();
+
+  let evtSource = null;
+
+  function appendLine(text, cls) {
+    const log = document.getElementById("log");
+
+    // Clear placeholder on first real line
+    const placeholder = log.querySelector(".line-dim");
+    if (placeholder) placeholder.remove();
+
+    const div = document.createElement("div");
+    if (cls) div.className = cls;
+    div.textContent = text;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function runPipeline() {
+    const btn = document.getElementById("runBtn");
+    const startDate = document.getElementById("start_date").value;
+    const daysBack = parseInt(document.getElementById("days_back").value);
+
+    // Reset UI
+    document.getElementById("log").innerHTML = "";
+    document.getElementById("status").textContent = "running...";
+    btn.disabled = true;
+
+    // POST to Flask to start the pipeline thread
+    const res = await fetch("/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ start_date: startDate, days_back: daysBack }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      appendLine("error: " + (err.error || "could not start"), "line-err");
+      document.getElementById("status").textContent = "error";
+      btn.disabled = false;
+      return;
+    }
+
+    // Open SSE stream to receive live logs
+    if (evtSource) evtSource.close();
+    evtSource = new EventSource("/stream");
+
+    evtSource.onmessage = (e) => {
+      if (e.data === "__DONE__") {
+        evtSource.close();
+        document.getElementById("status").textContent = "done";
+        btn.disabled = false;
+        return;
+      }
+      // Colour lines that contain error/success keywords
+      const cls = e.data.includes("error") || e.data.includes("❌")
+        ? "line-err"
+        : e.data.includes("✅") || e.data.includes("success")
+        ? "line-ok"
+        : null;
+      appendLine(e.data, cls);
+    };
+
+    evtSource.onerror = () => {
+      evtSource.close();
+      appendLine("connection lost", "line-err");
+      document.getElementById("status").textContent = "disconnected";
+      btn.disabled = false;
+    };
+  }
+</script>
+
+</body>
+</html>

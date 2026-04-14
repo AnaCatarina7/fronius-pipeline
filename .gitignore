@@ -1,8 +1,6 @@
 # credentials and secrets
 secrets/
 .env
-__pycache__/
-*.xlsx
 
 # python cache
 __pycache__/
@@ -11,4 +9,7 @@ __pycache__/
 
 # jupyter/colab artifacts
 .ipynb_checkpoints/
+
+# downloaded data files
+fronius_temp/
 *.xlsx

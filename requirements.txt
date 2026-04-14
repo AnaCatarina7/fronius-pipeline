@@ -6,3 +6,6 @@ openpyxl
 requests
 resend
 python-dotenv
+flask>=3.0
+python-dotenv>=1.0
+requests

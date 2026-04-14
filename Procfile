@@ -1,1 +1,1 @@
-worker: python scripts/ACTC-Fronius2.py
+web: python app.py
