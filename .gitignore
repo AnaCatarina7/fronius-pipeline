@@ -1,6 +1,7 @@
 # credentials and secrets
 secrets/
 .env
+*.pem
 
 # python cache
 __pycache__/
