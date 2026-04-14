@@ -131,7 +131,7 @@ if verbose:
 # ================================================================================
 # load github token and fetch file list from repository
 # ================================================================================
-GITHUB_TOKEN = get_secret_json(f'{user}-github_token.json')['key']
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN") or get_secret_json(f'{user}-github_token.json')['key']
 print("GitHub token loaded")
 
 url_api = "https://api.github.com/repos/pedroccpimenta/datafiles/contents/Fronius"
