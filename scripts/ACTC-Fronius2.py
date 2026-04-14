@@ -86,8 +86,8 @@ DEFAULT_PARAMS = {
     "destination": "-*-",
     "send_mail": True,
     "email_addresses": ["acatarinatc@gmail.com"],
-    "start_date": "2026-03-25",  # (format YYYY-MM-DD)
-    "days_back": 10
+    "start_date": os.getenv("START_DATE", "2026-04-14"),
+    "days_back": int(os.getenv("DAYS_BACK", "10"))
 }
 
 
