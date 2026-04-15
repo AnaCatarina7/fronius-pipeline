@@ -3,6 +3,7 @@
 # Fronius photovoltaic data pipeline - adapted for Colab, local, Flask and Render
 # ================================================================================
 
+
 import os
 import sys
 import datetime
@@ -13,15 +14,20 @@ import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+
 import pandas as pd
 import requests
+
 
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
 
+
 import clts_pcp as clts
 
+
 print("... imports done.")
+
 
 
 # ================================================================================
@@ -36,8 +42,10 @@ def detect_environment():
         return "local"
 
 
+
 env = detect_environment()
 print("Running in:", env)
+
 
 
 # ================================================================================
@@ -47,9 +55,11 @@ if env == "colab":
     from google.colab import userdata  # type: ignore
     import ipynbname                   # type: ignore
 
+
 elif env == "local":
     from dotenv import load_dotenv
     load_dotenv()
+
 
 
 # ================================================================================
@@ -57,6 +67,7 @@ elif env == "local":
 # ================================================================================
 def get_secret(name):
     return os.getenv(name)
+
 
 
 def get_secret_json(name):
@@ -70,11 +81,13 @@ def get_secret_json(name):
             return json.load(f)
 
 
+
 # ================================================================================
 # clts profiling
 # ================================================================================
 tstart = clts.getts()
 clts.elapt.clear()
+
 
 DEFAULT_PARAMS = {
     "verbose":          True,
@@ -85,9 +98,11 @@ DEFAULT_PARAMS = {
     "days_back":        int(os.getenv("DAYS_BACK", "10"))
 }
 
+
 hostname = socket.gethostname()
 ip       = requests.get("https://api.ipify.org").text
 print("Server name:", hostname, "Public IP Address:", ip)
+
 
 
 # ================================================================================
@@ -101,18 +116,22 @@ else:
     user   = os.getenv("USER", "ACTC")
     script = os.path.basename(__file__)
 
+
 channel         = "fronius"
 destination     = DEFAULT_PARAMS["destination"]
 verbose         = DEFAULT_PARAMS["verbose"]
 send_mail       = DEFAULT_PARAMS["send_mail"]
 email_addresses = DEFAULT_PARAMS["email_addresses"]
 
+
 context = f"{hostname} ({ip}) | {user} | {channel} | {script} | {destination}"
 clts.setcontext(context)
 clts.elapt[f"Environment detected: {env}"] = clts.deltat(tstart)
 
+
 if verbose:
     print("context:", context)
+
 
 
 # ================================================================================
@@ -121,13 +140,16 @@ if verbose:
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN") or get_secret_json(f"{user}-github_token.json")["key"]
 print("GitHub token loaded")
 
+
 url_api  = "https://api.github.com/repos/pedroccpimenta/datafiles/contents/Fronius"
 headers  = {"Authorization": f"token {GITHUB_TOKEN}"}
 response = requests.get(url_api, headers=headers)
 files    = response.json()
 
+
 clts.elapt["Fronius files list retrieved from GitHub"] = clts.deltat(tstart)
 print(f"Total files found: {len(files)}")
+
 
 
 # ================================================================================
@@ -137,6 +159,7 @@ start_date   = datetime.datetime.strptime(DEFAULT_PARAMS["start_date"], "%Y-%m-%
 days_back    = DEFAULT_PARAMS["days_back"]
 window_start = start_date - datetime.timedelta(days=days_back)
 window_end   = start_date
+
 
 recent_files = []
 for f in files:
@@ -148,12 +171,15 @@ for f in files:
     except Exception:
         pass
 
+
 clts.elapt[f"Files identified ({window_start} \u2192 {window_end}, {days_back} days)"] = clts.deltat(tstart)
+
 
 print(f"Window: {window_start} \u2192 {window_end}")
 print(f"Files found in window: {len(recent_files)}")
 for f in recent_files:
     print(f)
+
 
 
 # ================================================================================
@@ -162,12 +188,15 @@ for f in recent_files:
 # ================================================================================
 os.makedirs("fronius_temp", exist_ok=True)
 
+
 file_record_counts = {}  # {filename: nrows}
 all_data           = []
+
 
 for filename in recent_files:
     filename_encoded = filename.replace(" ", "%20")
     local_path       = os.path.join("fronius_temp", filename)
+
 
     if env == "colab":
         os.system(
@@ -181,35 +210,46 @@ for filename in recent_files:
         with open(local_path, "wb") as fh:
             fh.write(r.content)
 
+
     clts.elapt[f"Downloaded {filename}"] = clts.deltat(tstart)
+
 
     df_temp = pd.read_excel(local_path, header=0, skiprows=[1])
     file_record_counts[filename] = len(df_temp)
     all_data.append(df_temp)
 
+
     clts.elapt[f"{filename} loaded: {len(df_temp)} records"] = clts.deltat(tstart)
+
 
 clts.elapt[f"Files downloaded: {len(recent_files)}"] = clts.deltat(tstart)
 print(f"Files downloaded: {len(recent_files)}")
+
 
 if not all_data:
     print("No files found in window. Nothing to process.")
     sys.exit(0)
 
+
 df = pd.concat(all_data, ignore_index=True)
 
+
 clts.elapt[f"Data loaded: {len(df)} records from {len(recent_files)} files"] = clts.deltat(tstart)
+
 
 print("data loaded!")
 print(df.shape)
 
+
 df["Data e horário"] = pd.to_datetime(df["Data e horário"], format="%d.%m.%Y %H:%M")
 clts.elapt["Timestamp column converted to datetime"] = clts.deltat(tstart)
+
 
 print("Data types after conversion:")
 print(df.dtypes)
 print("\nNull values after conversion:")
 print(df.isnull().sum())
+
 
 
 # ================================================================================
@@ -218,6 +258,7 @@ print(df.isnull().sum())
 dblist = get_secret_json(f"{user}-dblist.json")
 print(dblist)
 
+
 for db in dblist:
     status = "nok"
     clts.elapt[f"Connecting to `{db}`"] = clts.deltat(tstart)
@@ -225,9 +266,11 @@ for db in dblist:
         print("db in dblist:", db)
         print(f"connecting to `{db}`")
 
+
     try:
         print(f"Credentials in `{user}-{db}.json`")
         dbcreds = get_secret_json(f"{user}-{db}.json")
+
 
         if dbcreds["dbms"] == "sql":
             import pymysql
@@ -243,6 +286,7 @@ for db in dblist:
             cursor = connection.cursor()
             clts.elapt[f"... connected to `{db}`"] = clts.deltat(tstart)
             status = "ok"
+
 
         elif dbcreds["dbms"] == "sql_tls":
             import pymysql
@@ -264,6 +308,7 @@ for db in dblist:
             clts.elapt[f"... connected to `{db}`"] = clts.deltat(tstart)
             status = "ok"
 
+
         elif dbcreds["dbms"] == "crate":
             from crate import client
             print("... connecting to crate database...")
@@ -277,6 +322,7 @@ for db in dblist:
             clts.elapt[f"... connected to `{db}`"] = clts.deltat(tstart)
             status = "ok"
 
+
         elif dbcreds["dbms"] == "influxdb":
             print("... connecting to influxdb database...")
             influx_client = InfluxDBClient(
@@ -288,20 +334,25 @@ for db in dblist:
             clts.elapt[f"... connected to `{db}`"] = clts.deltat(tstart)
             status = "ok"
 
+
         else:
             clts.elapt[f"... `{dbcreds['dbms']}` dbms not ready"] = clts.deltat(tstart)
             status = "onerror"
+
 
     except Exception as e:
         print("Error:", e)
         clts.elapt[f"... error `{e}`"] = clts.deltat(tstart)
         status = "onerror"
 
+
     print("status:", status)
+
 
     if status == "ok":
         inserts = 0
         skipped = 0
+
 
         # --------------------------------------------------------------------
         # InfluxDB: fetch existing IDs, build batch of new points, write once
@@ -311,7 +362,9 @@ for db in dblist:
             org       = dbcreds["org"]
             query_api = influx_client.query_api()
 
+
             retention_cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=29)
+
 
             try:
                 check_query = f'''
@@ -330,25 +383,31 @@ for db in dblist:
                 )
                 clts.elapt[f"... {len(existing_ids)} existing records fetched from influxdb"] = clts.deltat(tstart)
 
+
                 points_to_write = []
+
 
                 for _, row in df.iterrows():
                     tstamp = row["Data e horário"]
                     row_id = f"{hostname}_{tstamp.strftime('%Y-%m-%d %H:%M:%S')}"
 
+
                     if row_id in existing_ids:
                         skipped += 1
                         continue
 
+
                     if tstamp.replace(tzinfo=None) < retention_cutoff:
                         skipped += 1
                         continue
+
 
                     if pd.isna(row["Consumida diretamente"]) or \
                        pd.isna(row["Consumo"]) or \
                        pd.isna(row["Energia obtida da rede elétrica"]):
                         skipped += 1
                         continue
+
 
                     point = (
                         Point("fronius")
@@ -362,17 +421,21 @@ for db in dblist:
                     points_to_write.append(point)
                     inserts += 1
 
+
                 if points_to_write:
                     write_api.write(bucket=bucket, org=org, record=points_to_write)
 
+
                 clts.elapt[f"... {inserts} inserted, {skipped} skipped @ {db}"] = clts.deltat(tstart)
                 print(f"... {inserts} inserted, {skipped} skipped @ {db}")
+
 
             except Exception as e:
                 print("Error:", e)
                 if hasattr(e, "body"):
                     print("Error body:", e.body)
                 clts.elapt[f"... error inserting into `{db}`: `{e}`"] = clts.deltat(tstart)
+
 
         # --------------------------------------------------------------------
         # SQL / CrateDB: fetch existing IDs, bulk insert only new rows
@@ -392,10 +455,12 @@ for db in dblist:
                 )
                 clts.elapt[f"... {len(existing_ids)} existing records fetched from {db}"] = clts.deltat(tstart)
 
+
                 values_to_insert = []
                 for _, row in df.iterrows():
                     tstamp = row["Data e horário"]
                     row_id = f"{hostname}_{tstamp.strftime('%Y-%m-%d %H:%M:%S')}"
+
 
                     if row_id in existing_ids:
                         skipped += 1
@@ -409,6 +474,7 @@ for db in dblist:
                         ))
                         inserts += 1
 
+
                 if values_to_insert:
                     sql = (
                         "INSERT INTO fronius "
@@ -420,12 +486,15 @@ for db in dblist:
                     if dbcreds["dbms"] == "crate":
                         cursor.execute("REFRESH TABLE fronius")
 
+
                 clts.elapt[f"... {inserts} inserted, {skipped} skipped @ {db}"] = clts.deltat(tstart)
                 print(f"... {inserts} inserted, {skipped} skipped @ {db}")
+
 
             except Exception as e:
                 print("Error:", e)
                 clts.elapt[f"... error inserting into `{db}`: `{e}`"] = clts.deltat(tstart)
+
 
     print("Connection closing....")
     if dbcreds["dbms"] != "influxdb":
@@ -436,6 +505,7 @@ for db in dblist:
         clts.elapt[f"... connection to `{db}` closed"] = clts.deltat(tstart)
 
 
+
 # ================================================================================
 # send profiling email
 # render uses resend api because smtp ports are blocked on the free tier
@@ -443,27 +513,23 @@ for db in dblist:
 # ================================================================================
 clts.elapt["Overall (before email):"] = clts.deltat(tstart)
 
+
 if send_mail and email_addresses:
     toem = clts.listtimes()
 
-    # notebook link
+
+    # notebook link (colab only)
     if env == "colab":
         notebook_url       = "https://colab.research.google.com/drive/1NGjreXB-7bDCPCCf76fWmQu7WSTWts5e"
         notebook_link_html = f"<p><a href='{notebook_url}'>&#128211; Abrir notebook no Colab</a></p>"
     else:
         notebook_link_html = ""
 
-    # one line per file
-    files_lines_html = ""
-    for fname, nrows in file_record_counts.items():
-        files_lines_html += f"<p style='margin:2px 0;'>{fname} &nbsp;&mdash;&nbsp; {nrows} records</p>"
 
     html = f"""
     <html>
         <body style='font-family:Montserrat;'>
             {notebook_link_html}
-            <p><b>Files processed ({len(file_record_counts)}):</b></p>
-            {files_lines_html}
             <hr color='orange'>
             {toem}
             <hr color='orange'>
@@ -471,6 +537,7 @@ if send_mail and email_addresses:
         </body>
     </html>
     """
+
 
     if env == "render":
         try:
@@ -488,6 +555,7 @@ if send_mail and email_addresses:
             print("Notification not sent:", e)
             clts.elapt[f"email not sent ({e})"] = clts.deltat(tstart)
 
+
     else:
         try:
             if env == "colab":
@@ -496,21 +564,26 @@ if send_mail and email_addresses:
                 with open("./secrets/configGMail_ACTC.json", "r") as fh:
                     credsgmail = json.loads(fh.read())
 
+
             message            = MIMEMultipart("alternative")
             message["Subject"] = context
             message["From"]    = credsgmail["UserFrom"]
             message["To"]      = ", ".join(email_addresses)
 
+
             message.attach(MIMEText(f"This is an automated notification from {context}", "plain"))
             message.attach(MIMEText(html, "html"))
+
 
             ssl_context = ssl.create_default_context()
             with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl_context) as server:
                 server.login(credsgmail["UserName"], credsgmail["UserPwd"])
                 server.sendmail(credsgmail["UserFrom"], email_addresses, message.as_string())
 
+
             print("Notification sent.")
             clts.elapt["After sending email"] = clts.deltat(tstart)
+
 
         except Exception as e:
             print("Notification not sent:", e)
