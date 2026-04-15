@@ -45,7 +45,7 @@ print("Running in:", env)
 # ================================================================================
 if env == "colab":
     from google.colab import userdata  # type: ignore
-    import ipynbname  # type: ignore
+    import ipynbname                   # type: ignore
 
 elif env == "local":
     from dotenv import load_dotenv
@@ -77,16 +77,16 @@ tstart = clts.getts()
 clts.elapt.clear()
 
 DEFAULT_PARAMS = {
-    "verbose": True,
-    "destination": "-*-",
-    "send_mail": True,
-    "email_addresses": ["acatarinatc@gmail.com"],
-    "start_date": os.getenv("START_DATE", "2026-04-14"),
-    "days_back": int(os.getenv("DAYS_BACK", "10"))
+    "verbose":          True,
+    "destination":      "-*-",
+    "send_mail":        True,
+    "email_addresses":  ["acatarinatc@gmail.com"],
+    "start_date":       os.getenv("START_DATE", "2026-04-14"),
+    "days_back":        int(os.getenv("DAYS_BACK", "10"))
 }
 
 hostname = socket.gethostname()
-ip = requests.get("https://api.ipify.org").text
+ip       = requests.get("https://api.ipify.org").text
 print("Server name:", hostname, "Public IP Address:", ip)
 
 
@@ -95,10 +95,10 @@ print("Server name:", hostname, "Public IP Address:", ip)
 # ================================================================================
 if env == "colab":
     notebookname = requests.get("http://172.28.0.12:9000/api/sessions").json()[0]["name"]
-    user = notebookname.split("-")[0]
-    script = ipynbname.name()
+    user         = notebookname.split("-")[0]
+    script       = ipynbname.name()
 else:
-    user = os.getenv("USER", "ACTC")
+    user   = os.getenv("USER", "ACTC")
     script = os.path.basename(__file__)
 
 channel         = "fronius"
@@ -109,7 +109,6 @@ email_addresses = DEFAULT_PARAMS["email_addresses"]
 
 context = f"{hostname} ({ip}) | {user} | {channel} | {script} | {destination}"
 clts.setcontext(context)
-
 clts.elapt[f"Environment detected: {env}"] = clts.deltat(tstart)
 
 if verbose:
@@ -134,9 +133,8 @@ print(f"Total files found: {len(files)}")
 # ================================================================================
 # identify files within the date window
 # ================================================================================
-start_date = datetime.datetime.strptime(DEFAULT_PARAMS["start_date"], "%Y-%m-%d").date()
-days_back  = DEFAULT_PARAMS["days_back"]
-
+start_date   = datetime.datetime.strptime(DEFAULT_PARAMS["start_date"], "%Y-%m-%d").date()
+days_back    = DEFAULT_PARAMS["days_back"]
 window_start = start_date - datetime.timedelta(days=days_back)
 window_end   = start_date
 
@@ -150,23 +148,26 @@ for f in files:
     except Exception:
         pass
 
-clts.elapt[f"Files identified ({window_start} → {window_end}, {days_back} days)"] = clts.deltat(tstart)
+clts.elapt[f"Files identified ({window_start} \u2192 {window_end}, {days_back} days)"] = clts.deltat(tstart)
 
-print(f"Window: {window_start} → {window_end}")
+print(f"Window: {window_start} \u2192 {window_end}")
 print(f"Files found in window: {len(recent_files)}")
 for f in recent_files:
     print(f)
 
 
 # ================================================================================
-# download files into a temp folder to keep the repo clean
-# wget is only available in colab - on render/local we use requests.get
+# download files and load into dataframes
+# file_record_counts keeps track of rows per file for the email summary
 # ================================================================================
 os.makedirs("fronius_temp", exist_ok=True)
 
+file_record_counts = {}  # {filename: nrows}
+all_data           = []
+
 for filename in recent_files:
     filename_encoded = filename.replace(" ", "%20")
-    local_path = os.path.join("fronius_temp", filename)
+    local_path       = os.path.join("fronius_temp", filename)
 
     if env == "colab":
         os.system(
@@ -180,18 +181,16 @@ for filename in recent_files:
         with open(local_path, "wb") as fh:
             fh.write(r.content)
 
-clts.elapt["Files downloaded"] = clts.deltat(tstart)
-print(f"Files downloaded: {len(recent_files)}")
+    clts.elapt[f"Downloaded {filename}"] = clts.deltat(tstart)
 
-
-# ================================================================================
-# load and combine all downloaded files into a single DataFrame
-# ================================================================================
-all_data = []
-for filename in recent_files:
-    local_path = os.path.join("fronius_temp", filename)
     df_temp = pd.read_excel(local_path, header=0, skiprows=[1])
+    file_record_counts[filename] = len(df_temp)
     all_data.append(df_temp)
+
+    clts.elapt[f"{filename} loaded: {len(df_temp)} records"] = clts.deltat(tstart)
+
+clts.elapt[f"Files downloaded: {len(recent_files)}"] = clts.deltat(tstart)
+print(f"Files downloaded: {len(recent_files)}")
 
 if not all_data:
     print("No files found in window. Nothing to process.")
@@ -205,7 +204,6 @@ print("data loaded!")
 print(df.shape)
 
 df["Data e horário"] = pd.to_datetime(df["Data e horário"], format="%d.%m.%Y %H:%M")
-
 clts.elapt["Timestamp column converted to datetime"] = clts.deltat(tstart)
 
 print("Data types after conversion:")
@@ -234,7 +232,7 @@ for db in dblist:
         if dbcreds["dbms"] == "sql":
             import pymysql
             print("... connecting to sql database...")
-            timeout = dbcreds["timeout"]
+            timeout    = dbcreds["timeout"]
             connection = pymysql.connect(
                 host=dbcreds["dest_host"], port=dbcreds["port"],
                 db=dbcreds["database"], user=dbcreds["username"],
@@ -249,7 +247,7 @@ for db in dblist:
         elif dbcreds["dbms"] == "sql_tls":
             import pymysql
             print("... connecting to sql_tls database...")
-            timeout = dbcreds["timeout"]
+            timeout     = dbcreds["timeout"]
             pem_content = get_secret(dbcreds["pem"])
             with open(f"/tmp/{user}.pem", "w") as fh:
                 fh.write(pem_content)
@@ -313,8 +311,6 @@ for db in dblist:
             org       = dbcreds["org"]
             query_api = influx_client.query_api()
 
-            # retention cutoff: InfluxDB Cloud free tier has a 30-day retention
-            # use 29 days as a safe margin to avoid boundary errors
             retention_cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=29)
 
             try:
@@ -325,7 +321,7 @@ for db in dblist:
                     |> keep(columns: ["id"])
                     |> distinct(column: "id")
                 '''
-                result = query_api.query(org=org, query=check_query)
+                result       = query_api.query(org=org, query=check_query)
                 existing_ids = set(
                     record.values["id"]
                     for table in result
@@ -334,24 +330,20 @@ for db in dblist:
                 )
                 clts.elapt[f"... {len(existing_ids)} existing records fetched from influxdb"] = clts.deltat(tstart)
 
-                # build list of new points - avoids one HTTP request per row
                 points_to_write = []
 
                 for _, row in df.iterrows():
                     tstamp = row["Data e horário"]
                     row_id = f"{hostname}_{tstamp.strftime('%Y-%m-%d %H:%M:%S')}"
 
-                    # skip duplicates
                     if row_id in existing_ids:
                         skipped += 1
                         continue
 
-                    # skip points older than retention period
                     if tstamp.replace(tzinfo=None) < retention_cutoff:
                         skipped += 1
                         continue
 
-                    # skip rows with NaN values to avoid write errors
                     if pd.isna(row["Consumida diretamente"]) or \
                        pd.isna(row["Consumo"]) or \
                        pd.isna(row["Energia obtida da rede elétrica"]):
@@ -363,14 +355,13 @@ for db in dblist:
                         .tag("id", row_id)
                         .tag("hostname", hostname)
                         .field("consumida_diretamente", float(row["Consumida diretamente"]))
-                        .field("consumo", float(row["Consumo"]))
-                        .field("energia_rede", float(row["Energia obtida da rede elétrica"]))
+                        .field("consumo",               float(row["Consumo"]))
+                        .field("energia_rede",          float(row["Energia obtida da rede elétrica"]))
                         .time(tstamp, WritePrecision.S)
                     )
                     points_to_write.append(point)
                     inserts += 1
 
-                # single batch write instead of one request per row
                 if points_to_write:
                     write_api.write(bucket=bucket, org=org, record=points_to_write)
 
@@ -388,7 +379,7 @@ for db in dblist:
         # --------------------------------------------------------------------
         else:
             try:
-                all_ids = [
+                all_ids      = [
                     f"{hostname}_{row['Data e horário'].strftime('%Y-%m-%d %H:%M:%S')}"
                     for _, row in df.iterrows()
                 ]
@@ -426,7 +417,6 @@ for db in dblist:
                     )
                     cursor.executemany(sql, values_to_insert)
                     connection.commit()
-                    # CrateDB requires explicit refresh so next SELECT sees new rows
                     if dbcreds["dbms"] == "crate":
                         cursor.execute("REFRESH TABLE fronius")
 
@@ -456,23 +446,41 @@ clts.elapt["Overall (before email):"] = clts.deltat(tstart)
 if send_mail and email_addresses:
     toem = clts.listtimes()
 
+    # notebook link
+    if env == "colab":
+        notebook_url       = "https://colab.research.google.com/drive/1NGjreXB-7bDCPCCf76fWmQu7WSTWts5e"
+        notebook_link_html = f"<p><a href='{notebook_url}'>&#128211; Abrir notebook no Colab</a></p>"
+    else:
+        notebook_link_html = ""
+
+    # one line per file
+    files_lines_html = ""
+    for fname, nrows in file_record_counts.items():
+        files_lines_html += f"<p style='margin:2px 0;'>{fname} &nbsp;&mdash;&nbsp; {nrows} records</p>"
+
+    html = f"""
+    <html>
+        <body style='font-family:Montserrat;'>
+            {notebook_link_html}
+            <p><b>Files processed ({len(file_record_counts)}):</b></p>
+            {files_lines_html}
+            <hr color='orange'>
+            {toem}
+            <hr color='orange'>
+            This message is an automated notification from {context}
+        </body>
+    </html>
+    """
+
     if env == "render":
         try:
             import resend
             resend.api_key = os.getenv("RESEND_API_KEY")
             resend.Emails.send({
-                "from": "onboarding@resend.dev",
-                "to": email_addresses,
+                "from":    "onboarding@resend.dev",
+                "to":      email_addresses,
                 "subject": context,
-                "html": f"""
-                <html>
-                    <body style='font-family:Montserrat;'>
-                        {toem}
-                        <hr color='orange'>
-                        This message is an automated notification from {context}
-                    </body>
-                </html>
-                """
+                "html":    html
             })
             print("Notification sent.")
             clts.elapt["After sending email"] = clts.deltat(tstart)
@@ -488,27 +496,16 @@ if send_mail and email_addresses:
                 with open("./secrets/configGMail_ACTC.json", "r") as fh:
                     credsgmail = json.loads(fh.read())
 
-            message = MIMEMultipart("alternative")
+            message            = MIMEMultipart("alternative")
             message["Subject"] = context
             message["From"]    = credsgmail["UserFrom"]
             message["To"]      = ", ".join(email_addresses)
 
-            text = f"{toem}\nThis is an automated notification."
-            html = f"""
-            <html>
-                <body style='font-family:Montserrat;'>
-                    {toem}
-                    <hr color='orange'>
-                    This message is an automated notification from {context}
-                </body>
-            </html>
-            """
-            message.attach(MIMEText(text, "plain"))
+            message.attach(MIMEText(f"This is an automated notification from {context}", "plain"))
             message.attach(MIMEText(html, "html"))
 
-            port        = 465
             ssl_context = ssl.create_default_context()
-            with smtplib.SMTP_SSL("smtp.gmail.com", port, context=ssl_context) as server:
+            with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ssl_context) as server:
                 server.login(credsgmail["UserName"], credsgmail["UserPwd"])
                 server.sendmail(credsgmail["UserFrom"], email_addresses, message.as_string())
 
