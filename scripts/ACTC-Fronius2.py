@@ -80,7 +80,7 @@ DEFAULT_PARAMS = {
     "verbose":          True,
     "destination":      "-*-",
     "send_mail":        True,
-    "email_addresses":  ["acatarinatc@gmail.com", "pedroccpimenta@gmail.com"],
+    "email_addresses":  ["acatarinatc@gmail.com"],
     "start_date":       os.getenv("START_DATE", "2026-04-14"),
     "days_back":        int(os.getenv("DAYS_BACK", "10"))
 }
