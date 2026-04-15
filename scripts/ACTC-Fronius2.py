@@ -74,7 +74,7 @@ def get_secret_json(name):
 # clts profiling
 # ================================================================================
 tstart = clts.getts()
-clts.elapt.clear()   # reset profiling table between runs
+clts.elapt.clear()
 
 DEFAULT_PARAMS = {
     "verbose": True,
@@ -101,10 +101,10 @@ else:
     user = os.getenv("USER", "ACTC")
     script = os.path.basename(__file__)
 
-channel     = "fronius"
-destination = DEFAULT_PARAMS["destination"]
-verbose     = DEFAULT_PARAMS["verbose"]
-send_mail   = DEFAULT_PARAMS["send_mail"]
+channel         = "fronius"
+destination     = DEFAULT_PARAMS["destination"]
+verbose         = DEFAULT_PARAMS["verbose"]
+send_mail       = DEFAULT_PARAMS["send_mail"]
 email_addresses = DEFAULT_PARAMS["email_addresses"]
 
 context = f"{hostname} ({ip}) | {user} | {channel} | {script} | {destination}"
@@ -306,7 +306,7 @@ for db in dblist:
         skipped = 0
 
         # --------------------------------------------------------------------
-        # InfluxDB: fetch existing IDs, skip outdated points, write new ones
+        # InfluxDB: fetch existing IDs, build batch of new points, write once
         # --------------------------------------------------------------------
         if dbcreds["dbms"] == "influxdb":
             bucket    = dbcreds["bucket"]
@@ -333,6 +333,9 @@ for db in dblist:
                     if "id" in record.values
                 )
                 clts.elapt[f"... {len(existing_ids)} existing records fetched from influxdb"] = clts.deltat(tstart)
+
+                # build list of new points - avoids one HTTP request per row
+                points_to_write = []
 
                 for _, row in df.iterrows():
                     tstamp = row["Data e horário"]
@@ -364,8 +367,12 @@ for db in dblist:
                         .field("energia_rede", float(row["Energia obtida da rede elétrica"]))
                         .time(tstamp, WritePrecision.S)
                     )
-                    write_api.write(bucket=bucket, org=org, record=point)
+                    points_to_write.append(point)
                     inserts += 1
+
+                # single batch write instead of one request per row
+                if points_to_write:
+                    write_api.write(bucket=bucket, org=org, record=points_to_write)
 
                 clts.elapt[f"... {inserts} inserted, {skipped} skipped @ {db}"] = clts.deltat(tstart)
                 print(f"... {inserts} inserted, {skipped} skipped @ {db}")
@@ -381,7 +388,6 @@ for db in dblist:
         # --------------------------------------------------------------------
         else:
             try:
-                # normalize ID format with strftime to match what is stored in the DB
                 all_ids = [
                     f"{hostname}_{row['Data e horário'].strftime('%Y-%m-%d %H:%M:%S')}"
                     for _, row in df.iterrows()
