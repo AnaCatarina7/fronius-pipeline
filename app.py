@@ -7,13 +7,14 @@ from flask import Flask, render_template, request, jsonify, Response, stream_wit
 
 app = Flask(__name__)
 
-# ── Queue para capturar logs em tempo real ──────────────────────────────────
-log_queue = queue.Queue()
-pipeline_running = False
+# ── State ─────────────────────────────────────────────────────────────────────
+log_queue = queue.Queue()   # holds log messages to stream to the browser
+pipeline_running = False    # prevents concurrent pipeline runs
 
 
+# ── Stdout capture ────────────────────────────────────────────────────────────
 class QueueLogger:
-    """Redireciona stdout para a fila de logs."""
+    """Redirects stdout to the log queue so every print() reaches the browser."""
     def __init__(self, q):
         self.queue = q
         self.terminal = sys.__stdout__
@@ -27,61 +28,61 @@ class QueueLogger:
         self.terminal.flush()
 
 
+# ── Pipeline runner ───────────────────────────────────────────────────────────
 def run_pipeline(start_date: str, days_back: int):
+    """Loads and executes the Fronius pipeline script in a background thread."""
     global pipeline_running
     pipeline_running = True
-
-    # Redireciona prints para a fila
     sys.stdout = QueueLogger(log_queue)
 
     try:
         log_queue.put(f"[{datetime.now().strftime('%H:%M:%S')}] A iniciar pipeline...\n")
         log_queue.put(f"[{datetime.now().strftime('%H:%M:%S')}] start_date={start_date} | days_back={days_back}\n")
 
-        # ── Importa e corre o teu script ───────────────────────────────────
-        # Muda o env para "render" (ou "local") conforme o ambiente
-        os.environ["ENV"] = os.getenv("ENV", "render")
+        # Pass parameters to the pipeline script via environment variables
         os.environ["START_DATE"] = start_date
-        os.environ["DAYS_BACK"] = str(days_back)
+        os.environ["DAYS_BACK"]  = str(days_back)
 
-        # Importa o script principal
-        # Se o ficheiro se chama ACTC-Fronius2.py, usa importlib:
+        # Load and execute the pipeline script dynamically (avoids refactoring it)
         import importlib.util, pathlib
         script_path = pathlib.Path(__file__).parent / "scripts" / "ACTC-Fronius2.py"
 
         if script_path.exists():
-            spec = importlib.util.spec_from_file_location("fronius_pipeline", script_path)
+            spec   = importlib.util.spec_from_file_location("fronius_pipeline", script_path)
             module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(module)
             log_queue.put(f"[{datetime.now().strftime('%H:%M:%S')}] ✅ Pipeline concluído com sucesso!\n")
         else:
-            log_queue.put(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️  Script não encontrado em: {script_path}\n")
-            log_queue.put(f"[{datetime.now().strftime('%H:%M:%S')}] Verifica se o caminho está correto no app.py\n")
+            log_queue.put(f"[{datetime.now().strftime('%H:%M:%S')}] ⚠️  Script not found at: {script_path}\n")
 
     except Exception as e:
-        log_queue.put(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Erro: {e}\n")
+        log_queue.put(f"[{datetime.now().strftime('%H:%M:%S')}] ❌ Error: {e}\n")
+
     finally:
         log_queue.put("__DONE__")
         sys.stdout = sys.__stdout__
         pipeline_running = False
 
 
+# ── Routes ────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
+    """Serves the main control panel."""
     return render_template("index.html")
 
 
 @app.route("/run", methods=["POST"])
 def run():
+    """Starts the pipeline in a background thread. Rejects concurrent runs."""
     global pipeline_running
     if pipeline_running:
         return jsonify({"error": "Pipeline já está em execução."}), 409
 
-    data = request.get_json()
+    data       = request.get_json()
     start_date = data.get("start_date", datetime.today().strftime("%Y-%m-%d"))
-    days_back = int(data.get("days_back", 7))
+    days_back  = int(data.get("days_back", 7))
 
-    # Limpa a fila antes de nova execução
+    # Clear any leftover messages from a previous run
     while not log_queue.empty():
         log_queue.get_nowait()
 
@@ -92,29 +93,34 @@ def run():
 
 @app.route("/stream")
 def stream():
-    """Server-Sent Events — envia logs em tempo real para o browser."""
+    """Server-Sent Events endpoint — pushes log lines to the browser in real time."""
     def generate():
         while True:
             try:
                 msg = log_queue.get(timeout=30)
                 if msg == "__DONE__":
-                    yield f"data: __DONE__\n\n"
+                    yield "data: __DONE__\n\n"
                     break
                 yield f"data: {msg.rstrip()}\n\n"
             except queue.Empty:
-                yield f"data: [timeout] Sem resposta há 30s.\n\n"
+                yield "data: [timeout] Sem resposta há 30s.\n\n"
                 break
 
-    return Response(stream_with_context(generate()),
-                    mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
 
 
 @app.route("/status")
 def status():
+    """Returns whether the pipeline is currently running (used by the frontend)."""
     return jsonify({"running": pipeline_running})
 
 
+# ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
+    # PORT is injected by Render in production; defaults to 5000 locally
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)

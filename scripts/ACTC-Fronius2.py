@@ -75,7 +75,6 @@ def get_secret_json(name):
 # ================================================================================
 tstart = clts.getts()
 clts.elapt.clear()   # reset profiling table between runs
-tstart = clts.getts()
 
 DEFAULT_PARAMS = {
     "verbose": True,
@@ -110,8 +109,6 @@ email_addresses = DEFAULT_PARAMS["email_addresses"]
 
 context = f"{hostname} ({ip}) | {user} | {channel} | {script} | {destination}"
 clts.setcontext(context)
-now  = str(datetime.datetime.now())[0:19]
-hoje = now[:10]
 
 clts.elapt[f"Environment detected: {env}"] = clts.deltat(tstart)
 
