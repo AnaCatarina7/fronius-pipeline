@@ -2,6 +2,7 @@ import os
 import sys
 import threading
 import queue
+import requests
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 
@@ -117,6 +118,16 @@ def stream():
 def status():
     """Returns whether the pipeline is currently running (used by the frontend)."""
     return jsonify({"running": pipeline_running})
+
+@app.route("/files")
+def list_files():
+    """Returns the list of files available in the GitHub Fronius folder."""
+    token = os.getenv("GITHUB_TOKEN")
+    url = "https://api.github.com/repos/pedroccpimenta/datafiles/contents/Fronius"
+    headers = {"Authorization": f"token {token}"}
+    r = requests.get(url, headers=headers)
+    files = [f["name"] for f in r.json() if isinstance(f, dict) and "name" in f]
+    return jsonify({"files": files})
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────

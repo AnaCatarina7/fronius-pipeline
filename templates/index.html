@@ -5,196 +5,304 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Fronius Pipeline</title>
   <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: monospace;
-      background: #1a1a1a;
-      color: #d4d4d4;
-      max-width: 700px;
-      margin: 60px auto;
+      font-family: system-ui, sans-serif;
+      background: #f5f4f0;
+      color: #1c1a16;
+      max-width: 680px;
+      margin: 56px auto;
       padding: 0 1.5rem;
-    }
-
-    h1 {
       font-size: 1rem;
-      font-weight: normal;
-      color: #888;
-      margin-bottom: 2rem;
-      letter-spacing: 0.05em;
     }
 
-    /* Form fields */
-    .fields {
+    h1 { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.3rem; }
+    .sub { font-size: 0.875rem; color: #888; margin-bottom: 0.9rem; }
+
+    /* source switcher row — below header, right-aligned */
+    .source-row {
       display: flex;
-      gap: 1.5rem;
-      margin-bottom: 1.25rem;
-    }
-
-    label {
-      display: block;
-      font-size: 0.75rem;
-      color: #666;
-      margin-bottom: 0.4rem;
-    }
-
-    input {
-      background: #2a2a2a;
-      border: 1px solid #333;
-      color: #d4d4d4;
-      padding: 0.4rem 0.6rem;
-      font-family: monospace;
-      font-size: 0.85rem;
-      border-radius: 4px;
-      width: 160px;
-    }
-
-    input:focus {
-      outline: none;
-      border-color: #555;
-    }
-
-    /* Run button */
-    button {
-      background: #2a2a2a;
-      border: 1px solid #444;
-      color: #d4d4d4;
-      padding: 0.45rem 1.2rem;
-      font-family: monospace;
-      font-size: 0.85rem;
-      border-radius: 4px;
-      cursor: pointer;
+      justify-content: flex-end;
       margin-bottom: 1.5rem;
     }
-
-    button:hover { border-color: #777; }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    /* Status line */
-    #status {
-      font-size: 0.75rem;
-      color: #666;
-      margin-bottom: 0.75rem;
-      min-height: 1rem;
+    .source-select-wrap {
+      position: relative;
+    }
+    .source-select-wrap select {
+      appearance: none;
+      -webkit-appearance: none;
+      background: #fff;
+      border: 1px solid #d8d5cf;
+      border-radius: 9px;
+      padding: 0.52rem 2.2rem 0.52rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #3a3835;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.07), 0 1px 1px rgba(0,0,0,0.04);
+      letter-spacing: 0.01em;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .source-select-wrap select:hover {
+      border-color: #b0ada7;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    .source-select-wrap select:focus {
+      outline: none;
+      border-color: #01696f;
+      box-shadow: 0 0 0 3px rgba(1,105,111,0.1);
+    }
+    .source-select-wrap::after {
+      content: '';
+      position: absolute;
+      right: 0.75rem;
+      top: 50%;
+      transform: translateY(-50%);
+      border-left: 4.5px solid transparent;
+      border-right: 4.5px solid transparent;
+      border-top: 5.5px solid #999;
+      pointer-events: none;
     }
 
-    /* Log terminal */
+    .card {
+      background: #fff;
+      border: 1px solid rgba(0,0,0,0.09);
+      border-radius: 10px;
+      padding: 1.5rem 1.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .card-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #bbb;
+      margin-bottom: 1.1rem;
+    }
+
+    /* file list */
+    #fileList {
+      font-family: monospace;
+      font-size: 0.875rem;
+      color: #555;
+      line-height: 2.1;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+    .file-row {
+      border-bottom: 1px solid #f0ede8;
+      padding: 3px 6px;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+    }
+    .file-row:last-child { border-bottom: none; }
+    .fdot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      background: #01696f;
+      border-radius: 50%;
+      margin-right: 8px;
+      flex-shrink: 0;
+      opacity: 0.5;
+    }
+    .fmsg { color: #bbb; font-style: italic; font-size: 0.875rem; }
+
+    /* form */
+    .fields { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .field { display: flex; flex-direction: column; gap: 0.5rem; }
+    label { font-size: 0.82rem; color: #777; font-weight: 500; }
+    input[type="date"], input[type="number"] {
+      background: #f9f8f5;
+      border: 1px solid #ddd;
+      border-radius: 7px;
+      padding: 0.5rem 0.75rem;
+      font-family: monospace;
+      font-size: 0.95rem;
+      color: #1c1a16;
+    }
+    input[type="date"] { width: 180px; }
+    input[type="number"] { width: 100px; }
+    input:focus { outline: none; border-color: #01696f; background: #fff; }
+
+    .btn-run {
+      background: #01696f;
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: 0.55rem 1.5rem;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-run:hover { background: #0c4e54; }
+    .btn-run:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+      color: #888;
+      margin-bottom: 0.9rem;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+    .dot.running { background: #964219; animation: pulse 1s infinite; }
+    .dot.done    { background: #437a22; }
+    .dot.error   { background: #a12c7b; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+    /* log — clean light */
     #log {
-      background: #111;
-      border: 1px solid #2a2a2a;
-      border-radius: 4px;
-      padding: 1rem;
-      font-size: 0.78rem;
-      line-height: 1.7;
-      color: #aaa;
+      background: #f9f8f5;
+      border: 1px solid #e5e2dc;
+      border-radius: 8px;
+      padding: 1.1rem 1.25rem;
+      font-family: monospace;
+      font-size: 0.84rem;
+      line-height: 1.9;
+      color: black;
       min-height: 260px;
-      max-height: 500px;
+      max-height: 460px;
       overflow-y: auto;
       white-space: pre-wrap;
       word-break: break-all;
     }
-
-    .line-ok  { color: #7ec87e; }
-    .line-err { color: #c87ea0; }
-    .line-dim { color: #555; }
+    .ok  { color: #2e6e12; }
+    .err { color: #a12c2c; }
+    .dim { color: #c0bdb8; }
   </style>
 </head>
 <body>
 
-  <h1>FRONIUS / SOLAR DATA PIPELINE</h1>
+  <h1 id="pageTitle">Fronius Pipeline</h1>
+  <div class="sub">Solar data ingestion · CrateDB &amp; InfluxDB</div>
 
-  <!-- Config fields -->
-  <div class="fields">
-    <div>
-      <label for="start_date">start_date</label>
-      <input type="date" id="start_date" />
-    </div>
-    <div>
-      <label for="days_back">days_back</label>
-      <input type="number" id="days_back" value="10" min="1" max="365" />
+  <!-- source dropdown: below header, right-aligned -->
+  <div class="source-row">
+    <div class="source-select-wrap">
+      <select id="sourceSelect" onchange="switchSource(this.value)">
+        <option value="fronius">Fronius</option>
+        <option value="drive">Balcão Digital</option>
+      </select>
     </div>
   </div>
 
-  <button id="runBtn" onclick="runPipeline()">▶ run</button>
+  <!-- 1. Files -->
+  <div class="card">
+    <div class="card-title" id="fileCardTitle">Files in repository</div>
+    <div id="fileList"><span class="fmsg">Loading...</span></div>
+  </div>
 
-  <div id="status">ready</div>
+  <!-- 2. Configure -->
+  <div class="card">
+    <div class="card-title">Configuration</div>
+    <div class="fields">
+      <div class="field">
+        <label for="start_date">Start date</label>
+        <input type="date" id="start_date" />
+      </div>
+      <div class="field">
+        <label for="days_back">Days back</label>
+        <input type="number" id="days_back" value="10" min="1" max="365" />
+      </div>
+    </div>
+    <button class="btn-run" id="runBtn" onclick="runPipeline()">▶ Run pipeline</button>
+  </div>
 
-  <!-- Output log -->
-  <div id="log"><span class="line-dim">— waiting for run —</span></div>
+  <!-- 3. Log -->
+  <div class="card">
+    <div class="card-title">Output log</div>
+    <div class="status-row"><div class="dot" id="dot"></div><span id="status">ready</span></div>
+    <div id="log"><span class="dim">— waiting for run —</span></div>
+  </div>
 
 <script>
-  // Set default date: March of current year, minus 10 days from today
-  (function () {
-    const today = new Date();
-    const march = new Date(today.getFullYear(), 2, 1); // March 1st
-    march.setDate(march.getDate() - 10);               // minus 10 days
-    document.getElementById("start_date").value = march.toISOString().split("T")[0];
-  })();
+  // default date
+  const today = new Date();
+  const d = new Date(today.getFullYear(), 2, 1);
+  d.setDate(d.getDate() - 10);
+  document.getElementById("start_date").value = d.toISOString().split("T")[0];
 
-  let evtSource = null;
+  function switchSource(source) {
+    if (source === "drive") {
+      document.getElementById("pageTitle").textContent = "Balcão Digital";
+      document.getElementById("fileCardTitle").textContent = "Files in Google Drive";
+      document.getElementById("fileList").innerHTML = '<span class="fmsg">Google Drive integration not yet available.</span>';
+    } else {
+      document.getElementById("pageTitle").textContent = "Fronius Pipeline";
+      document.getElementById("fileCardTitle").textContent = "Files in repository";
+      loadFiles();
+    }
+  }
 
-  function appendLine(text, cls) {
+  function loadFiles() {
+    const list = document.getElementById("fileList");
+    list.innerHTML = '<span class="fmsg">Loading...</span>';
+    fetch("/files")
+      .then(r => r.json())
+      .then(data => {
+        const files = data.files || [];
+        if (!files.length) { list.innerHTML = '<span class="fmsg">No files found.</span>'; return; }
+        list.innerHTML = files.map(f =>
+          `<div class="file-row"><span class="fdot"></span><span>${f}</span></div>`
+        ).join("");
+      })
+      .catch(() => {
+        list.innerHTML = '<span class="fmsg">Could not load file list.</span>';
+      });
+  }
+
+  loadFiles();
+
+  function setStatus(txt, state) {
+    document.getElementById("status").textContent = txt;
+    document.getElementById("dot").className = "dot" + (state ? " " + state : "");
+  }
+
+  function appendLine(txt, cls) {
     const log = document.getElementById("log");
-
-    // Clear placeholder on first real line
-    const placeholder = log.querySelector(".line-dim");
-    if (placeholder) placeholder.remove();
-
+    const ph = log.querySelector(".dim");
+    if (ph) ph.remove();
     const div = document.createElement("div");
     if (cls) div.className = cls;
-    div.textContent = text;
+    div.textContent = txt;
     log.appendChild(div);
     log.scrollTop = log.scrollHeight;
   }
 
+  let evtSource = null;
   async function runPipeline() {
     const btn = document.getElementById("runBtn");
     const startDate = document.getElementById("start_date").value;
     const daysBack = parseInt(document.getElementById("days_back").value);
-
-    // Reset UI
     document.getElementById("log").innerHTML = "";
-    document.getElementById("status").textContent = "running...";
+    setStatus("running...", "running");
     btn.disabled = true;
 
-    // POST to Flask to start the pipeline thread
     const res = await fetch("/run", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ start_date: startDate, days_back: daysBack }),
     });
-
     if (!res.ok) {
       const err = await res.json();
-      appendLine("error: " + (err.error || "could not start"), "line-err");
-      document.getElementById("status").textContent = "error";
-      btn.disabled = false;
-      return;
+      appendLine("error: " + (err.error || "could not start"), "err");
+      setStatus("error", "error"); btn.disabled = false; return;
     }
 
-    // Open SSE stream to receive live logs
     if (evtSource) evtSource.close();
     evtSource = new EventSource("/stream");
-
     evtSource.onmessage = (e) => {
-      if (e.data === "__DONE__") {
-        evtSource.close();
-        document.getElementById("status").textContent = "done";
-        btn.disabled = false;
-        return;
-      }
-      // Colour lines that contain error/success keywords
-      const cls = e.data.includes("error") || e.data.includes("❌")
-        ? "line-err"
-        : e.data.includes("✅") || e.data.includes("success")
-        ? "line-ok"
-        : null;
+      if (e.data === "__DONE__") { evtSource.close(); setStatus("done", "done"); btn.disabled = false; return; }
+      const cls = e.data.includes("error") || e.data.includes("❌") ? "err"
+                : e.data.includes("✅") || e.data.includes("success") ? "ok" : null;
       appendLine(e.data, cls);
     };
-
     evtSource.onerror = () => {
-      evtSource.close();
-      appendLine("connection lost", "line-err");
-      document.getElementById("status").textContent = "disconnected";
-      btn.disabled = false;
+      evtSource.close(); appendLine("connection lost", "err");
+      setStatus("disconnected", "error"); btn.disabled = false;
     };
   }
 </script>

@@ -13,4 +13,5 @@ __pycache__/
 
 # downloaded data files
 fronius_temp/
+balcao_temp/
 *.xlsx
